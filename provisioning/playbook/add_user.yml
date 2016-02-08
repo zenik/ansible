@@ -1,0 +1,16 @@
+---
+- name: add admin user
+  hosts: vagrant_init
+  become: true
+  tasks:
+    - name: create pass hash
+    # MD5ではなくSHA512にすべき
+      command: openssl passwd -salt {{ salt }} -1 {{ password }}
+      register: pass_hash
+
+    - name: add a new user
+      user: name={{ user_name }} password={{ pass_hash.stdout }} state=present groups=wheel
+
+    - name: allow wheel users to sudo
+      # NOTE: Because of the ': ' on the line, fully quote or use {{':'}}.
+      lineinfile: dest=/etc/sudoers regexp="^#\s*(%wheel\s+ALL=\(ALL\)\s+NOPASSWD{{':'}}\s+ALL)" line="\1" backrefs=yes state=present

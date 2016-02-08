@@ -1,22 +1,24 @@
 ---
 - name: setup wordpress
   hosts: vagrant
-  remote_user: admin
+  remote_user: "{{ remote_user_name }}"
   become: true
-  vars:
-    mariadb_root_password: toshi555
-    ansible_hostname: 192.168.33.10
-    mysql_wp_user: wordpress
-    mysql_wp_user_pass: toshi555
-    mysql_wp_db: wordpress
   tasks:
-    - name: install wordpress
-      yum: name=wordpress state=present
-      notify: restart httpd
+    - name: download wordpress
+      get_url: url=https://ja.wordpress.org/latest-ja.tar.gz dest=/usr/share/wp.tar.gz mode=0777
+
+    - name: unarchive
+      unarchive: src=/usr/share/wp.tar.gz dest=/usr/share/ copy=no
+
+    - name: remove downloaded wordpress archive
+      file: path=/usr/share/wp.tar.gz state=absent
 
     - name: set apache config for wordpress
       copy: src=../conf/wordpress.conf dest=/etc/httpd/conf.d/wordpress.conf owner=root mode=0755
       notify: restart httpd
+
+    - name: set htaccess for wp-config.php
+      copy: src=../conf/htaccess dest=/usr/share/wordpress/.htaccess owner=apache mode=0755
 
     - name: change directory owner and group
       file: path=/usr/share/wordpress state=directory owner=apache group=apache recurse=yes

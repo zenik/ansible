@@ -1,26 +1,20 @@
 ---
-- name: setup admin user
+- name: setup sshd
   hosts: vagrant_init
   become: true
-  vars:
-    user_name: admin
-    password: toshi555
-    salt: salty
-    ssh_key_pub: ../keys/fs_key.pub # To base playbook directory
-    ssh_port: 22
   tasks:
-    - name: create pass hash
-    # MD5ではなくSHA512にすべき
-      command: openssl passwd -salt {{ salt }} -1 {{ password }}
-      register: pass_hash
+    # firewalld
+    - name: start firewalld
+      service: name=firewalld state=started enabled=yes
 
-    - name: add a new user
-      user: name={{ user_name }} password={{ pass_hash.stdout }} state=present groups=wheel
+    #- name: disable default ssh port
+    #  firewalld: service=ssh zone=public permanent=true state=disabled immediate=true
 
-    - name: allow wheel users to sudo
-      # NOTE: Because of the ': ' on the line, fully quote or use {{':'}}.
-      lineinfile: dest=/etc/sudoers regexp="^#\s*(%wheel\s+ALL=\(ALL\)\s+NOPASSWD{{':'}}\s+ALL)" line="\1" backrefs=yes state=present
+    - name: enable ssh port
+      firewalld: port="{{ ssh_port_fw }}" zone=public permanent=true state=enabled immediate=true
+      notify: restart firewalld
 
+    # sshd config
     - name: register ssh key
       authorized_key: user={{ user_name }} key="{{ lookup('file', ssh_key_pub) }}"
 
@@ -28,7 +22,7 @@
       lineinfile: dest=/etc/ssh/sshd_config regexp="^#Port " line="Port {{ ssh_port }}" state=present
 
     - name: disallow ssh root login
-      lineinfile: dest=/etc/ssh/sshd_config regexp="^#PermitRootLogin " line="PermitRootLogin no" state=present
+      lineinfile: dest=/etc/ssh/sshd_config regexp="^PermitRootLogin " line="PermitRootLogin no" state=present
 
     - name: disallow ssh password
       lineinfile: dest=/etc/ssh/sshd_config regexp="^#PasswordAuthentication " line="PasswordAuthentication no" state=present
@@ -41,5 +35,8 @@
       notify: restart sshd
 
   handlers:
+    - name: restart firewalld
+      service: name=firewalld state=restarted
+
     - name: restart sshd
       service: name=sshd state=restarted

@@ -1,35 +1,41 @@
 ---
 - name: setup LAMP
   hosts: vagrant
-  remote_user: admin
+  remote_user: "{{ remote_user_name }}"
   become: true
   vars:
     php_list:
       - php
       - php-mbstring
       - php-pear
+      - php-gd
+      - php-mysql
+      - php-pdo
     mariadb_list:
       - mariadb
       - mariadb-devel
       - mariadb-server
       - MySQL-python # For mysql module
-    mariadb_root_password: toshi555
-    ansible_hostname: 192.168.33.10
   tasks:
     # repository
     - name: add repository 'epel'
       yum: name=http://ftp.riken.jp/Linux/fedora/epel/7/x86_64/e/epel-release-7-5.noarch.rpm state=present
+      ignore_errors: yes
 
     # Apache
     - name: install apache
       yum: name=httpd state=present
     - name: start httpd
       service: name=httpd state=started enabled=yes
-  
+    - name: enable httpd port
+      firewalld: service=http zone=public permanent=true state=enabled immediate=true
+      notify: restart firewalld
+
     # PHP
     - name: install php
       yum: name={{ item }} state=present
       with_items: php_list
+      notify: restart httpd
 
     # MariaDB
     - name: install MariaDB
@@ -39,7 +45,7 @@
       copy: src=../conf/server.cnf dest=/etc/my.cnf.d/server.cnf owner=root mode=0755
     - name: start mariadb
       service: name=mariadb state=started enabled=yes
-    - name: Change root user password on first run
+    - name: change root user password on first run
       mysql_user: name=root
                   password={{ mariadb_root_password }}
       ignore_errors: yes
@@ -63,3 +69,10 @@
       mysql_user: login_user=root login_password="{{ mariadb_root_password }}" user="" state=absent
     - name: remove the MySQL test database
       mysql_db: login_user=root login_password="{{ mariadb_root_password }}" db=test state=absent
+
+  handlers:
+    - name: restart httpd
+      service: name=httpd state=restarted
+
+    - name: restart firewalld
+      service: name=firewalld state=restarted
